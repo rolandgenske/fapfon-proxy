@@ -62,13 +62,13 @@ enum loglevel_t
 
 typedef struct
 {
-   char *pname;            /* process name */
-   addr_t box;             /* box address/port */
-   const char *tcp_port;   /* SIP port, TCP */
-   const char *udp_port;   /* SIP port, UDP */
-   FILE *log_fp;           /* log file descriptor */
-   int log_level;          /* log level, enum loglevel_t */
-   int log_dump;           /* LOG_DUMP_FON and/or LOG_DUMP_BOX */
+   char *pname;                  /* process name */
+   addr_t box;                   /* Box address/port */
+   const char *tcp_port;         /* SIP port, TCP */
+   const char *udp_port;         /* SIP port, UDP */
+   FILE *log_fp;                 /* log file descriptor */
+   enum loglevel_t log_level;    /* log level */
+   int log_dump;                 /* LOG_DUMP_FON and/or LOG_DUMP_BOX */
 }
 options_t;
 

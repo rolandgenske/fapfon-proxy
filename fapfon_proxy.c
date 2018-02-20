@@ -281,12 +281,13 @@ void client_tcp_setup(int sfd);
 void client_udp_setup(int sfd);
 static int sfd_server_tcp = -1, sfd_server_udp = -1;
 
-void on_tcp_server_event(int sfd, int sfd_event)
+static void on_tcp_server_event(int sfd, int sfd_event)
 {
    if (sfd_event & ~SFD_EVENT_DATA)
    {
       log_printf(LOG_ERROR, "TCP server socket no longer available"
          " - shutting down");
+
       sfd_close(&sfd_server_udp);
       sfd_close(&sfd_server_tcp);
       exit(1);
@@ -295,12 +296,13 @@ void on_tcp_server_event(int sfd, int sfd_event)
    client_tcp_setup(sfd);
 }
 
-void on_udp_server_event(int sfd, int sfd_event)
+static void on_udp_server_event(int sfd, int sfd_event)
 {
    if (sfd_event & ~SFD_EVENT_DATA)
    {
       log_printf(LOG_ERROR, "UDP server socket no longer available"
          " - shutting down");
+
       sfd_close(&sfd_server_udp);
       sfd_close(&sfd_server_tcp);
       exit(1);
@@ -336,7 +338,7 @@ static void on_event(int sfd, void *context, int sfd_event)
 static void server_setup(void)
 {
    if (   tcp_listen(&sfd_server_tcp, NULL, 0,
-                      options.tcp_port, strlen(options.tcp_port))
+                     options.tcp_port, strlen(options.tcp_port))
        && sfd_register(sfd_server_tcp, NULL, NULL)
        && udp_bind(&sfd_server_udp, NULL, 0,
                    options.udp_port, strlen(options.udp_port))
@@ -346,6 +348,9 @@ static void server_setup(void)
    }
 
    log_printf(LOG_ERROR, "Server initialization failed");
+
+   sfd_close(&sfd_server_udp);
+   sfd_close(&sfd_server_tcp);
    exit(1);
 }
 
@@ -418,6 +423,9 @@ int main(int argc, char *argv[])
 
    log_printf(LOG_INFO, "Exit %s version %s",
       options.pname, VERSION_STRING);
+
+   sfd_close(&sfd_server_udp);
+   sfd_close(&sfd_server_tcp);
    return 0;
 }
 
@@ -441,7 +449,7 @@ void log_printf(enum loglevel_t level, const char *fmt, ...)
    else
       return;
 
-   time (&tv);
+   time(&tv);
    localtime_r(&tv, &tm);
    strftime(tmp, sizeof(tmp), "%Y%m%d %H%M%S", &tm);
 

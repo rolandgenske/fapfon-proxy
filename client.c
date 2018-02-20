@@ -259,7 +259,7 @@ static int16_t contact_id(const packet_t *packet,
 
 
 /* ------------------------------------------------------------------------
-   process FON to BOX message
+   process Fon to Box message
    ------------------------------------------------------------------------ */
 
 static int fon_to_box(client_context_t *client,
@@ -374,7 +374,7 @@ static int fon_to_box(client_context_t *client,
 
 
 /* ------------------------------------------------------------------------
-   process BOX message
+   process Box to Fon message
    ------------------------------------------------------------------------ */
 
 static int box_to_fon(client_context_t *client,

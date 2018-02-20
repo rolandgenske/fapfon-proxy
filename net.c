@@ -664,7 +664,6 @@ int udp_connect(int *sfd_p, const char *addr, uint8_t addr_l,
       }
 
       assert(source_port != NULL);
-      assert(source_port_l != 0);
       if (!port_aton(&net_source_port, source_port, source_port_l))
       {
          log_printf(LOG_ERROR, "udp_connect: "
@@ -1068,7 +1067,7 @@ int port_aton(uint16_t *port_p, const char *port, uint8_t port_l)
       errno = 0;
       port_decoded = strtol(tmp, &end_p, 10);
       if (   errno == 0 && *end_p == '\0'
-          && port_decoded > 0 && port_decoded <= 65535)
+          && port_decoded > 0 && port_decoded < 65536)
       {
          *port_p = htons((uint16_t)port_decoded);
          return 1;
