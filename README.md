@@ -151,7 +151,7 @@ Before sending this to the Fon app the _rport_ is replaced with the original _Vi
 Via: SIP/2.0/TCP 172.20.11.6:61211;rport=61211;branch=***;alias;received=172.30.10.2\r\n
 ```
 
-The FRITZ!App Fon _USERNAME_ identifier obtained in the initial SIP REGISTER message is used to manage individual address/port replacement for multiple simultaneous FRITZ!App Fon connections. Set `--verbose=3` to see this in the log.
+The FRITZ!App Fon _USERNAME_ identifier obtained in the initial SIP REGISTER message is used to manage individual address/port replacement for multiple simultaneous connections from different devices. Set `--verbose=3` to see this in the log.
 
 ## Command Line Usage
 
