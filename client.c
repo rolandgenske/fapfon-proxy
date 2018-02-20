@@ -247,7 +247,7 @@ static int16_t contact_id(const packet_t *packet,
       while (i < l && packet->buf.p[i] != '@')
          i++;
 
-      if (i < l)
+      if (i < l && i > contact_id_i)
       {
          *l_p = i - contact_id_i;
          return contact_id_i;
@@ -830,7 +830,8 @@ void client_udp_setup(int sfd)
 
    for (client = client_list; client != NULL; client = client->next)
    {
-      if (   contact_id_l == client->contact_id_l
+      if (   client->contact_id != NULL
+          && contact_id_l == client->contact_id_l
           && !strncasecmp(packet.buf.p + contact_id_i,
                           client->contact_id, client->contact_id_l))
       {
