@@ -74,9 +74,10 @@ static int buf_append(buf_t *buf, const void *add_data, uint32_t add_size)
    {
       memcpy(buf->p + buf->used, add_data, add_size);
       buf->used += add_size;
+      return 1;
    }
 
-   return 1;
+   return 0;
 }
 
 
