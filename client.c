@@ -269,7 +269,7 @@ static int fon_to_box(client_context_t *client,
 
    while (client->contact_id == NULL)
    {
-      int16_t contact_id_i;
+      int16_t contact_id_i, contact_id_l;
 
       assert(client->contact_id_l == 0);
 
@@ -287,16 +287,17 @@ static int fon_to_box(client_context_t *client,
 
       if ((contact_id_i = contact_id(&from_ep->packet,
                                      &from_ep->packet.contact,
-                                     &client->contact_id_l)) != -1)
+                                     &contact_id_l)) != -1)
       {
          client_context_t *cl;
+         char *contact_id;
          data_t d;
          int addr_i, addr_l, port_i, port_l;
 
          for (cl = client_list; cl != NULL; cl = cl->next)
          {
-            if (   client != cl
-                && client->contact_id_l == cl->contact_id_l
+            if (   cl->contact_id != NULL
+                && contact_id_l == cl->contact_id_l
                 && !strncasecmp(from_ep->packet.buf.p + contact_id_i,
                                 cl->contact_id, cl->contact_id_l))
             {
@@ -308,12 +309,12 @@ static int fon_to_box(client_context_t *client,
             }
          }
 
-         client->contact_id = malloc(client->contact_id_l + 1);
-         if (client->contact_id == NULL)
+         contact_id = malloc(contact_id_l + 1);
+         if (contact_id == NULL)
          {
             log_printf(LOG_ERROR, "fon_to_box:"
                " Memory allocation failed (%d bytes)",
-               client->contact_id_l);
+               contact_id_l);
 
             return 0;
          }
@@ -322,10 +323,13 @@ static int fon_to_box(client_context_t *client,
          d.i = contact_id_i;
          d.l = from_ep->packet.contact.offs + from_ep->packet.contact.len;
 
-         memcpy(client->contact_id, d.p + d.i, client->contact_id_l);
-         client->contact_id[client->contact_id_l] = '\0';
+         memcpy(contact_id, d.p + d.i, contact_id_l);
+         contact_id[contact_id_l] = '\0';
 
-         d.i += client->contact_id_l + 1;
+         client->contact_id = contact_id;
+         client->contact_id_l = contact_id_l;
+
+         d.i += contact_id_l + 1;
          if (   (addr_i = addr_find(&d, &addr_l)) == d.i
              && (port_i = port_find(&d, addr_i, addr_l, &port_l)) != -1)
          {
