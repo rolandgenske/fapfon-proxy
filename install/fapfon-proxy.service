@@ -1,0 +1,13 @@
+[Unit]
+Description=Workaround for FRITZ!App Fon SIP via VPN
+After=network-online.target
+
+[Service]
+EnvironmentFile=/etc/default/fapfon-proxy
+ExecStartPre=/usr/local/bin/fapfon-proxy.nat setup
+ExecStart=/usr/local/bin/fapfon-proxy $OPTIONS $SIP_REDIRECT_PORT --logfile=${LOGFILE} ${BOX}
+ExecStopPost=/usr/local/bin/fapfon-proxy.nat cleanup
+Restart=on-abnormal
+
+[Install]
+WantedBy=multi-user.target

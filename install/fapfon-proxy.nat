@@ -1,0 +1,88 @@
+#!/bin/bash
+#
+# Workaround for FRITZ!App Fon SIP via VPN
+#
+# Setup/cleanup port redirection or destination NAT
+# to redirect SIP traffic through fapfon-proxy
+
+conf="/etc/default/fapfon-proxy"
+[[ -r "$conf" ]] && . "$conf"
+
+if [[ -z "$VPN" || -z "$BOX" || -z "$LOGFILE" ]]; then
+  echo "Configuration at $conf not present or incomplete"
+  exit 1
+fi
+
+unset proxy_addr proxy_port
+route_to_box=$( ip -o route get "$BOX" )
+if [[ $route_to_box =~ local ]]; then
+
+  # fapfon-proxy runs on box,
+  # obtain local port from SIP_REDIRECT_PORT
+
+  [[ $SIP_REDIRECT_PORT =~ ([0-9]+)$ ]] && proxy_port=${BASH_REMATCH[1]}
+  if [[ ! -v proxy_port ]]; then
+    echo "SIP_REDIRECT_PORT configuration missing or incorrect"
+    exit 1
+  fi
+
+else
+
+  # fapfon-proxy does not run on Box,
+  # obtain destination nat address by resolving route to Box
+
+  [[ $route_to_box =~ src\ ([0-9.]+) ]] && proxy_addr=${BASH_REMATCH[1]}
+  if [[ ! -v proxy_addr ]]; then
+    echo "Failed to obtain proxy address"
+    exit 1
+  fi
+
+fi
+
+nat()
+{
+  action=$1
+
+  if [[ -v proxy_port ]]; then
+
+    # fapfon-proxy runs on Box, configure port redirection
+
+    for s in $VPN; do
+      for p in tcp udp; do
+        iptables -t nat $action PREROUTING \
+          -p $p -s $s -d $BOX --dport sip \
+          -j REDIRECT --to-port $proxy_port
+      done
+    done
+
+  else
+
+    # fapfon-proxy does not run on Box, configure destination nat
+
+    for s in $VPN; do
+      for p in tcp udp; do
+        iptables -t nat $action PREROUTING \
+          -p $p -s $s -d $BOX --dport sip \
+          -j DNAT --to-destination $proxy_addr
+      done
+    done
+
+  fi
+}
+
+case "$1" in
+
+  setup)
+    nat -A >> "$LOGFILE" 2>&1
+    ;;
+
+  cleanup)
+    nat -D >> "$LOGFILE" 2>&1
+    ;;
+
+  *)
+    echo "usage: $(basename $0) {setup|cleanup}"
+    exit 2
+    ;;
+
+esac

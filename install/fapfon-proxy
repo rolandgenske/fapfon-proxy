@@ -1,0 +1,18 @@
+# /etc/default/fapfon-proxy
+# Workaround for FRITZ!App Fon SIP via VPN
+
+# FRITZ!Box address
+BOX="172.30.10.1"
+
+# VPN client addresses
+VPN="172.20.11.0/24 172.20.12.0/24"
+
+# fapfon-proxy options
+OPTIONS="--verbose=1"
+
+# log file
+LOGFILE="/var/log/fapfon-proxy.log"
+
+# uncomment SIP_REDIRECT_PORT below if fapfon-proxy
+# runs on FRITZ!Box (activates local port redirection)
+#SIP_REDIRECT_PORT="--port=6060"
