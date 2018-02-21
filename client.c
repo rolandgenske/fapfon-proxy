@@ -8,7 +8,7 @@
    published by the Free Software Foundation.
 
    2018-02-09 - v0.1
-   2018-02-20 - v0.2, functionally complete
+   2018-02-21 - v0.2, functionally complete
 
    ------------------------------------------------------------------------ */
 
@@ -273,13 +273,13 @@ static int fon_to_box(client_context_t *client,
 
       assert(client->contact_id_l == 0);
 
-      if (!from_ep->packet.method.len)
+      if (from_ep->packet.method.len == 0)
       {
          log_printf(LOG_VERBOSE, "%s, SIP method expected", log_prefix);
          return 0;
       }
 
-      if (!from_ep->packet.contact.offs || !from_ep->packet.contact.len)
+      if (from_ep->packet.contact.offs == 0)
       {
          log_printf(LOG_VERBOSE, "%s, Contact header expected", log_prefix);
          return 0;
@@ -301,10 +301,19 @@ static int fon_to_box(client_context_t *client,
                 && !strncasecmp(from_ep->packet.buf.p + contact_id_i,
                                 cl->contact_id, cl->contact_id_l))
             {
-               /* contact identifier already registered,
-                  assume stale connection and disconnect it */
+               /* contact identifier already registered */
+
                if (cl->connected)
+               {
+                  /* assume stale connection and disconnect it */
+
+                  log_printf(LOG_VERBOSE, "[%u]"
+                     " Disconnecting stale connection [%u]",
+                     client->id, cl->id);
+
                   tcp_disconnect(&cl->fon.tcp.sfd);
+               }
+
                break;
             }
          }

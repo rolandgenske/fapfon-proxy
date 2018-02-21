@@ -8,7 +8,7 @@
    published by the Free Software Foundation.
 
    2018-02-09 - v0.1
-   2018-02-20 - v0.2, functionally complete
+   2018-02-21 - v0.2, functionally complete
 
    ------------------------------------------------------------------------ */
 
@@ -136,8 +136,6 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
       /* header, get next line */
 
       uint32_t buf_i = packet->current_line.offs + packet->current_line.len;
-      assert(packet->data.len == 0);
-
       for (;;)
       {
          while (   buf_i < packet->buf.used
@@ -274,6 +272,7 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
 
             const char *p = packet->buf.p + packet->current_line.offs;
             uint32_t l = 0, i;
+            int ok;
 
             while (l < packet->current_line.len)
             {
@@ -288,6 +287,16 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
             }
 
             if (l == 0 || l == packet->current_line.len || p[l] != ':')
+               ok = 0;
+            else {
+               i = l + 1;
+               while (i < packet->current_line.len && p[i] == ' ')
+                  i++;
+
+               ok = i < packet->current_line.len;
+            }
+
+            if (!ok)
             {
                log_printf(LOG_VERBOSE, "%s: SIP header not recognized",
                   log_prefix);
@@ -295,61 +304,103 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
                return 0;
             }
 
-            i = l + 1;
-            while (i < packet->current_line.len && p[i] == ' ')
-               i++;
-
-            if (l == 3 && !strncasecmp("Via", p, l))
+            while (ok)
             {
-               packet->via_line.offs = packet->current_line.offs;
-               packet->via_line.len = packet->current_line.len;
-
-               packet->via.offs = packet->current_line.offs + i;
-               packet->via.len = packet->current_line.len - i;
-            }
-            else if (l == 4 && !strncasecmp("From", p, l))
-            {
-               packet->from.offs = packet->current_line.offs + i;
-               packet->from.len = packet->current_line.len - i;
-            }
-            else if (l == 2 && !strncasecmp("To", p, l))
-            {
-               packet->to.offs = packet->current_line.offs + i;
-               packet->to.len = packet->current_line.len - i;
-            }
-            else if (l == 7 && !strncasecmp("Contact", p, l))
-            {
-               packet->contact.offs = packet->current_line.offs + i;
-               packet->contact.len = packet->current_line.len - i;
-            }
-            else if (l == 14 && !strncasecmp("Content-Length", p, l))
-            {
-               packet->content_length.offs = packet->current_line.offs + l+1;
-               packet->content_length.len = packet->current_line.len - l-1;
-
-               /* get content length */
-
-               int ok;
-               if (i == packet->current_line.len || p[i] < '0' || p[i] > '9')
-                  ok = 0;
-               else {
-                  while (   i < packet->current_line.len
-                         && p[i] >= '0' && p[i] <= '9')
-                  {
-                     packet->data.len = packet->data.len * 10 + p[i++] - '0';
+               if (l == 3 && !strncasecmp("Via", p, l))
+               {
+                  if (packet->via.offs)
+                  {  
+                     ok = 0;
+                     break;
                   }
 
-                  ok = i == packet->current_line.len;
+                  assert(packet->via_line.offs == 0);
+                  packet->via_line.offs = packet->current_line.offs;
+                  packet->via_line.len = packet->current_line.len;
+
+                  packet->via.offs = packet->current_line.offs + i;
+                  packet->via.len = packet->current_line.len - i;
+               }
+               else if (l == 4 && !strncasecmp("From", p, l))
+               {
+                  if (packet->from.offs)
+                  {  
+                     ok = 0;
+                     break;
+                  }
+
+                  packet->from.offs = packet->current_line.offs + i;
+                  packet->from.len = packet->current_line.len - i;
+               }
+               else if (l == 2 && !strncasecmp("To", p, l))
+               {
+                  if (packet->to.offs)
+                  {  
+                     ok = 0;
+                     break;
+                  }
+
+                  packet->to.offs = packet->current_line.offs + i;
+                  packet->to.len = packet->current_line.len - i;
+               }
+               else if (l == 7 && !strncasecmp("Contact", p, l))
+               {
+                  if (packet->contact.offs)
+                  {  
+                     /* multiple Contact header lines may occur,
+                        the first one is used */
+                     break;
+                  }
+
+                  packet->contact.offs = packet->current_line.offs + i;
+                  packet->contact.len = packet->current_line.len - i;
+               }
+               else if (l == 14 && !strncasecmp("Content-Length", p, l))
+               {
+                  if (packet->content_length.offs)
+                  {  
+                     ok = 0;
+                     break;
+                  }
+
+                  assert(packet->data.len == 0);
+
+                  packet->content_length.offs = packet->current_line.offs + l+1;
+                  packet->content_length.len = packet->current_line.len - l-1;
+
+                  /* get content length */
+
+                  if (i == packet->current_line.len || p[i] < '0' || p[i] > '9')
+                     ok = 0;
+                  else {
+                     while (   i < packet->current_line.len
+                            && p[i] >= '0' && p[i] <= '9')
+                     {
+                        packet->data.len = packet->data.len * 10 + p[i++] - '0';
+                     }
+
+                     ok = i == packet->current_line.len;
+                  }
+
+                  if (!ok)
+                  {
+                     log_printf(LOG_VERBOSE, "%s: "
+                        "Content-Length header not recognized",
+                        log_prefix);
+                     packet->status = PACKET_ERROR;
+                     return 0;
+                  }
                }
 
-               if (!ok)
-               {
-                  log_printf(LOG_VERBOSE, "%s: "
-                     "Content-Length header not recognized",
-                     log_prefix);
-                  packet->status = PACKET_ERROR;
-                  return 0;
-               }
+               break;
+            }
+
+            if (!ok)
+            {
+               log_printf(LOG_VERBOSE, "%s: Duplicate %.*s header",
+                  log_prefix, l, p);
+               packet->status = PACKET_ERROR;
+               return 0;
             }
          }
 
