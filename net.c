@@ -60,7 +60,7 @@ poll_list;
 
 int sfd_wait(sfd_callback_t cb)
 {
-   poll_item_t *pi = poll_list.pi;
+   poll_item_t *pi;
    struct pollfd *pfd;
    int i, cnt = 0;
 
