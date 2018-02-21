@@ -20,7 +20,7 @@ In my home network I already have a Raspberry Pi acting as OpenVPN server, so I 
 
 If you are interested in the technical details, see [below](#technical-details).
 
-I could not use the IPsec-based FRITZ!Box VPN functionality because it requires a public IPv4 address which I don't have because my internet connection uses Dual-Stack Lite (DS Lite) technology which tunnels IPv4 over IPv6.
+Unfortunately, I cannot use the IPsec-based FRITZ!Box VPN functionality. It requires a public IPv4 address which I don't have, got a Dual-Stack Lite (DS Lite) internet connection.
 
 ## Installation
 
