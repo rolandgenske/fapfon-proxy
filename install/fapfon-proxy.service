@@ -1,6 +1,7 @@
 [Unit]
 Description=Workaround for FRITZ!App Fon SIP via VPN
-After=network-online.target
+Wants=network-online.target
+After=network.target network-online.target
 
 [Service]
 EnvironmentFile=/etc/default/fapfon-proxy
