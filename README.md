@@ -20,8 +20,6 @@ In my home network I already have a Raspberry Pi acting as OpenVPN server, so I 
 
 If you are interested in the technical details, see [below](#technical-details).
 
-Unfortunately, I cannot use the IPsec-based FRITZ!Box VPN functionality. It requires a public IPv4 address which I don't have, got a Dual-Stack Lite (DS Lite) internet connection.
-
 ## Installation
 
 Install fapfon-proxy on the system where your VPN server runs. The tested configuration is Raspbian 9 (stretch) with gcc 6.3.0. You can run it on your Box with Freetz if this is where your VPN server is located.
