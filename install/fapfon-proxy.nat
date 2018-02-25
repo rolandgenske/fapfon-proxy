@@ -6,15 +6,18 @@
 # to redirect SIP traffic through fapfon-proxy
 
 conf="/etc/default/fapfon-proxy"
+
+unset BOX VPN SIP_REDIRECT_PORT LOGFILE
 [[ -r "$conf" ]] && . "$conf"
 
-if [[ -z "$VPN" || -z "$BOX" || -z "$LOGFILE" ]]; then
+if [[ -z "$BOX" || -z "$VPN" || -z "$LOGFILE" ]]; then
   echo "Configuration at $conf not present or incomplete"
   exit 1
 fi
 
-unset proxy_addr proxy_port
 route_to_box=$( ip -o route get "$BOX" )
+
+unset proxy_addr proxy_port
 if [[ $route_to_box =~ local ]]; then
 
   # fapfon-proxy runs on box,
