@@ -2,7 +2,7 @@ TARGET = fapfon-proxy
 OBJ = fapfon_proxy.o client.o packet.o net.o
 
 CC = gcc
-CFLAGS += -Wall -pipe -fno-strict-aliasing -D_GNU_SOURCE -DOSREV=2600
+CFLAGS += -Wall -pipe -fno-strict-aliasing -D_GNU_SOURCE
 ifdef DEBUG
 CFLAGS += -g
 else
@@ -12,13 +12,7 @@ endif
 $(TARGET): $(OBJ) Makefile
 	$(CC) -o $@ $(OBJ)
 
+$(OBJ): fapfon_proxy.h
+
 clean:
 	@ rm -f $(TARGET) $(OBJ)
-
-fapfon_proxy.o: fapfon_proxy.h
-
-client.o: fapfon_proxy.h
-
-packet.o: fapfon_proxy.h
-
-net.o: fapfon_proxy.h
