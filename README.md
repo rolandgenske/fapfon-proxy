@@ -81,7 +81,7 @@ iptables -t nat -L PREROUTING
 
 This is a dump of the initial SIP REGISTER message FRITZ!App Fon sends to my Box. The involved addresses are:
 
-- **10.64.72.11** : private mobile phone provider address (Telekom), FRITZ!App Fon binds to TCP/UDP port **61211**
+- **10.81.179.54** : private mobile phone provider address (Telekom), FRITZ!App Fon binds to TCP/UDP port **61211**
 - **172.20.11.6** : address of OpenVPN endpoint on mobile phone, TCP message sent from port **62895**
 - **172.30.10.1** : Box address in my network, TCP message sent to SIP port **5060**
 - **172.30.10.2** : Address of the Raspberry Pi in my network, running the VPN server and fapfon-proxy
@@ -96,14 +96,14 @@ Call-ID: ***\r\n
 CSeq: 24441 REGISTER\r\n
 User-Agent: FRITZ!AppFon/2549 sip/1.16.0\r\n
 Supported: outbound, path\r\n
-Contact: <sip:USERNAME@10.64.72.11:61211;transport=TCP;ob>;reg-id=1;+sip.instance="<urn:uuid:***>"\r\n
+Contact: <sip:USERNAME@10.81.179.54:61211;transport=TCP;ob>;reg-id=1;+sip.instance="<urn:uuid:***>"\r\n
 Expires: 900\r\n
 Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n
 Content-Length:  0\r\n
 \r\n
 ```
 
-The main problem here is that _Contact_ uses the private mobile phone provider address **10.64.72.11** which does not route back to FRITZ!App Fon via OpenVPN and furthermore cannot be reached on the Internet. This is the reason why incoming calls cannot be routed to the Fon app.
+The main problem here is that _Contact_ uses the private mobile phone provider address **10.81.179.54** which does not route back to FRITZ!App Fon via OpenVPN and furthermore cannot be reached on the Internet. This is the reason why incoming calls cannot be routed to the Fon app.
 
 If this would be the originating **172.20.11.6** address with port **62895** all would be fine.
 
@@ -116,13 +116,13 @@ Content-Type: application/sdp\r\n
 Content-Length:   295\r\n
 \r\n
 v=0\r\n
-o=- 3727522826 3727522826 IN IP4 10.64.72.11\r\n
+o=- 3727522826 3727522826 IN IP4 10.81.179.54\r\n
 s=pjmedia\r\n
-c=IN IP4 10.64.72.11\r\n
+c=IN IP4 10.81.179.54\r\n
 t=0 0\r\n
 a=X-nat:0\r\n
 m=audio 4000 RTP/AVP 8 0 3 101\r\n
-a=rtcp:4001 IN IP4 10.64.72.11\r\n
+a=rtcp:4001 IN IP4 10.81.179.54\r\n
 a=rtpmap:8 PCMA/8000\r\n
 a=rtpmap:0 PCMU/8000\r\n
 a=rtpmap:3 GSM/8000\r\n
@@ -131,11 +131,11 @@ a=rtpmap:101 telephone-event/8000\r\n
 a=fmtp:101 0-15\r\n
 ```
 
-Here, the originator / session identifier `o=` and the connection info `c=` as well as the RTP attribute `a=rtcp` all refer to the private mobile phone provider address **10.64.72.11**, which is why RTP audio does not route back to FRITZ!App Fon via OpenVPN. The Box routes it to the Internet where it gets lost because the private **10.64.72.11** address cannot be reached.
+Here, the originator / session identifier `o=` and the connection info `c=` as well as the RTP attribute `a=rtcp` all refer to the private mobile phone provider address **10.81.179.54**, which is why RTP audio does not route back to FRITZ!App Fon via OpenVPN. The Box routes it to the Internet where it gets lost because the private **10.81.179.54** address cannot be reached.
 
-So the goal is to modify the messages, which is what fapfon-proxy does. In the example above it replaces the **10.64.72.11[:61211]** address in the SIP header with the fapfon-proxy local address and TCP/UDP port, so that SIP responses go back through the proxy, which then reverts the address replacement before the message is sent to the Fon app.
+So the goal is to modify the messages, which is what fapfon-proxy does. In the example above it replaces the **10.81.179.54[:61211]** address in the SIP header with the fapfon-proxy local address and TCP/UDP port, so that SIP responses go back through the proxy, which then reverts the address replacement before the message is sent to the Fon app.
 
-Furthermore, in SDP data it replaces the **10.64.72.11** address with the FRITZ!App Fon OpenVPN endpoint address (**172.20.11.6** in this example) so that RTP audio goes directly to the Fon app, no need to send it through the proxy.
+Furthermore, in SDP data it replaces the **10.81.179.54** address with the FRITZ!App Fon OpenVPN endpoint address (**172.20.11.6** in this example) so that RTP audio goes directly to the Fon app, no need to send it through the proxy.
 
 For messages from FRITZ!App Fon we do not touch the SIP _Via_ header line, but on its way back the Box has added the _rport_ field (RFC 3581) using the fapfon-proxy local TCP/UDP port:
 
