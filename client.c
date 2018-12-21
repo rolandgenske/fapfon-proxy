@@ -9,6 +9,7 @@
 
    2018-02-09 - v0.1
    2018-02-21 - v0.2, functionally complete
+   2018-12-21 - v0.3, fix UDP REGISTER not recognized
 
    ------------------------------------------------------------------------ */
 
@@ -53,7 +54,7 @@ typedef struct client_context
    struct
    {
       endpoint_t tcp, udp;
-      addr_t contact;
+      addr_t contact, rtp;
    }
    fon;
 
@@ -81,7 +82,7 @@ static buf_t tmp_buf;
    ------------------------------------------------------------------------ */
 
 static int modify_addr_port(packet_t *packet, data_t *d,
-                            addr_t *from, addr_t *to)
+                            const addr_t *from, const addr_t *to)
 {
    for (;;)
    {
@@ -127,7 +128,8 @@ static int modify_addr_port(packet_t *packet, data_t *d,
    modify header
    ------------------------------------------------------------------------ */
 
-static int modify_header(packet_t *packet, addr_t *from, addr_t *to)
+static int modify_header(packet_t *packet,
+                         const addr_t *from, const addr_t *to)
 {
    data_t d;
 
@@ -153,7 +155,8 @@ static int modify_header(packet_t *packet, addr_t *from, addr_t *to)
    modify data
    ------------------------------------------------------------------------ */
 
-static int modify_data(packet_t *packet, addr_t *from, addr_t *to)
+static int modify_data(packet_t *packet,
+                       const addr_t *from, const addr_t *to)
 {
    if (packet->data.len)
    {
@@ -175,7 +178,7 @@ static int modify_data(packet_t *packet, addr_t *from, addr_t *to)
    modify Via rport
    ------------------------------------------------------------------------ */
 
-static int modify_via_rport(packet_t *packet, addr_t *to)
+static int modify_via_rport(packet_t *packet, const addr_t *to)
 {
    data_t d;
 
@@ -259,6 +262,17 @@ static int16_t contact_id(const packet_t *packet,
 
 
 /* ------------------------------------------------------------------------
+   disconnect client
+   ------------------------------------------------------------------------ */
+
+static void client_disconnect(client_context_t *client)
+{
+   tcp_disconnect(client->fon.tcp.sfd != -1 ? &client->fon.tcp.sfd
+                                            : &client->fon.udp.sfd);
+}
+
+
+/* ------------------------------------------------------------------------
    process Fon to Box message
    ------------------------------------------------------------------------ */
 
@@ -269,6 +283,8 @@ static int fon_to_box(client_context_t *client,
 
    while (client->contact_id == NULL)
    {
+      /* TCP connection, first message */
+
       int16_t contact_id_i, contact_id_l;
 
       assert(client->contact_id_l == 0);
@@ -311,7 +327,7 @@ static int fon_to_box(client_context_t *client,
                      " Disconnecting stale connection [%u]",
                      client->id, cl->id);
 
-                  tcp_disconnect(&cl->fon.tcp.sfd);
+                  client_disconnect(cl);
                }
 
                break;
@@ -323,7 +339,7 @@ static int fon_to_box(client_context_t *client,
          {
             log_printf(LOG_ERROR, "fon_to_box:"
                " Memory allocation failed (%d bytes)",
-               contact_id_l);
+               contact_id_l + 1);
 
             return 0;
          }
@@ -366,20 +382,80 @@ static int fon_to_box(client_context_t *client,
       return 0;
    }
 
-   if (!modify_header(&from_ep->packet,
-                      &client->fon.contact, &to_ep->local))
+   if (client->fon.contact.addr_l)
    {
-      log_printf(LOG_VERBOSE,
-         "Fon message header address modification failed");
-      return 0;
-   }
+      /* TCP connection */
 
-   if (!modify_data(&from_ep->packet,
-                    &client->fon.contact, &from_ep->peer))
+      if (!modify_header(&from_ep->packet,
+                         &client->fon.contact, &to_ep->local))
+      {
+         log_printf(LOG_VERBOSE,
+            "Fon message header address modification failed");
+         return 0;
+      }
+
+      if (!modify_data(&from_ep->packet,
+                       &client->fon.contact, &from_ep->peer))
+      {
+         log_printf(LOG_VERBOSE,
+            "Fon message data address modification failed");
+         return 0;
+      }
+   }
+   else if (from_ep->packet.data.len)
    {
-      log_printf(LOG_VERBOSE,
-         "Fon message data address modification failed");
-      return 0;
+      /* UDP connection */
+
+      if (client->fon.rtp.addr_l == 0)
+      {
+         /* first SDP message, locate RTP peer address */
+
+         data_t d;
+
+         d.p = from_ep->packet.buf.p + from_ep->packet.header.len;
+         d.i = 0;
+         d.l = from_ep->packet.data.len;
+
+         for (;;)
+         {
+            int addr_i, addr_l;
+
+            if ((addr_i = addr_find(&d, &addr_l)) == -1)
+               break;
+
+            if (   (   addr_l == from_ep->peer.addr_l
+                    && !memcmp(d.p + addr_i, from_ep->peer.addr, addr_l))
+                || (   addr_l == to_ep->peer.addr_l
+                    && !memcmp(d.p + addr_i, to_ep->peer.addr, addr_l)))
+            {
+               d.i = addr_i + addr_l;
+               continue;
+            }
+
+            memcpy(client->fon.rtp.addr, d.p + addr_i, addr_l);
+            client->fon.rtp.addr[addr_l] = '\0';
+            client->fon.rtp.addr_l = addr_l;
+
+            log_printf(LOG_VERBOSE, "[%u] %.*s%sRTP peer %.*s",
+               client->id,
+               from_ep->packet.method.len, from_ep->packet.buf.p,
+               from_ep->packet.method.len ? " " : "",
+               client->fon.rtp.addr_l, client->fon.rtp.addr);
+
+            break;
+         }
+      }
+
+      if (client->fon.rtp.addr_l)
+      {
+         if (!modify_data(&from_ep->packet,
+                          &client->fon.rtp, &from_ep->peer))
+         {
+            log_printf(LOG_VERBOSE,
+               "Fon message data address modification failed");
+            return 0;
+         }
+      }
    }
 
    return 1;
@@ -400,20 +476,37 @@ static int box_to_fon(client_context_t *client,
       return 0;
    }
 
-   if (!modify_header(&from_ep->packet,
-                      &from_ep->local, &client->fon.contact))
+   if (client->fon.contact.addr_l)
    {
-      log_printf(LOG_VERBOSE,
-         "Box message header address modification failed");
-      return 0;
-   }
+      /* TCP connection */
 
-   if (!modify_data(&from_ep->packet,
-                    &to_ep->peer, &client->fon.contact))
+      if (!modify_header(&from_ep->packet,
+                         &from_ep->local, &client->fon.contact))
+      {
+         log_printf(LOG_VERBOSE,
+            "Box message header address modification failed");
+         return 0;
+      }
+
+      if (!modify_data(&from_ep->packet,
+                       &to_ep->peer, &client->fon.contact))
+      {
+         log_printf(LOG_VERBOSE,
+            "Box message data address modification failed");
+         return 0;
+      }
+   }
+   else if (client->fon.rtp.addr_l)
    {
-      log_printf(LOG_VERBOSE,
-         "Box message data address modification failed");
-      return 0;
+      /* UDP connection */
+
+      if (!modify_data(&from_ep->packet,
+                       &to_ep->peer, &client->fon.rtp))
+      {
+         log_printf(LOG_VERBOSE,
+            "Box message data address modification failed");
+         return 0;
+      }
    }
 
    return 1;
@@ -545,7 +638,7 @@ static void client_packet(client_context_t *client,
          to_ep->peer.port_l, to_ep->peer.port,
          protocol == P_TCP ? "tcp" : "udp");
 
-      tcp_disconnect(&client->fon.tcp.sfd);
+      client_disconnect(client);
       return;
    }
 
@@ -558,7 +651,7 @@ static void client_packet(client_context_t *client,
          to_ep->peer.port_l, to_ep->peer.port,
          protocol == P_TCP ? "tcp" : "udp");
 
-      tcp_disconnect(&client->fon.tcp.sfd);
+      client_disconnect(client);
       return;
    }
 
@@ -576,7 +669,7 @@ static void client_packet(client_context_t *client,
          to_ep->peer.port_l, to_ep->peer.port,
          protocol == P_TCP ? "tcp" : "udp");
 
-      tcp_disconnect(&client->fon.tcp.sfd);
+      client_disconnect(client);
    }
 }
 
@@ -626,7 +719,7 @@ void on_client_event(int sfd, void *context, int sfd_event)
        || !buf_resize(&tmp_buf, available)
        || (ok = sfd_receive(from_ep->sfd, tmp_buf.p, available)) == 2)
    {
-      tcp_disconnect(&client->fon.tcp.sfd);
+      client_disconnect(client);
       return;
    }
    if (!ok)
@@ -638,7 +731,7 @@ void on_client_event(int sfd, void *context, int sfd_event)
          from_ep->peer.port_l, from_ep->peer.port,
          protocol == P_TCP ? "tcp" : "udp");
 
-      tcp_disconnect(&client->fon.tcp.sfd);
+      client_disconnect(client);
       return;
    }
 
@@ -651,7 +744,7 @@ void on_client_event(int sfd, void *context, int sfd_event)
          from_ep->peer.port_l, from_ep->peer.port,
          protocol == P_TCP ? "tcp" : "udp");
 
-      tcp_disconnect(&client->fon.tcp.sfd);
+      client_disconnect(client);
       return;
    }
 
@@ -665,7 +758,7 @@ void on_client_event(int sfd, void *context, int sfd_event)
             from_ep->peer.addr_l, from_ep->peer.addr,
             from_ep->peer.port_l, from_ep->peer.port);
 
-         tcp_disconnect(&client->fon.tcp.sfd);
+         client_disconnect(client);
       }
 
       return;
@@ -735,7 +828,7 @@ void client_tcp_setup(int sfd)
    client_context_t *client = calloc(1, sizeof(client_context_t));
    if (client == NULL)
    {
-      log_printf(LOG_ERROR, "client_setup:"
+      log_printf(LOG_ERROR, "client_tcp_setup:"
          " Memory allocation failed (%u bytes)",
          (unsigned int)sizeof(client_context_t));
 
@@ -851,22 +944,85 @@ void client_udp_setup(int sfd)
          break;
       }
    }
-   if (client == NULL)
-   {
-      log_printf(LOG_VERBOSE, "Packet from %.*s:%.*s/udp ignored,"
-         " contact '%.*s' not found",
-         peer.addr_l, peer.addr, peer.port_l, peer.port,
-         contact_id_l, packet.buf.p + contact_id_i);
 
-      buf_cleanup(&packet.buf);
-      return;
+   if (packet.method.len == 8 && !strncasecmp(packet.buf.p, "REGISTER", 8))
+   {
+      if (   client
+          && (   client->fon.udp.sfd == -1
+              || peer.addr_l != client->fon.udp.peer.addr_l
+              || memcmp(peer.addr, client->fon.udp.peer.addr, peer.addr_l)
+              || peer.port_l != client->fon.udp.peer.port_l
+              || memcmp(peer.port, client->fon.udp.peer.port, peer.port_l)))
+      {
+         /* new registration, same contact, different address,
+            disconnect if connected */
+
+         if (client->connected)
+            client_disconnect(client);
+
+         client = NULL;
+      }
+
+      if (client == NULL)
+      {
+         client = calloc(1, sizeof(client_context_t));
+         if (client == NULL)
+         {
+            log_printf(LOG_ERROR, "client_udp_setup:"
+               " Memory allocation failed (%u bytes)",
+               (unsigned int)sizeof(client_context_t));
+
+            buf_cleanup(&packet.buf);
+            return;
+         }
+
+         client->id = ++client_id;
+         client->fon.tcp.sfd = client->fon.udp.sfd =
+         client->box.tcp.sfd = client->box.udp.sfd = -1;
+
+         client->contact_id = malloc(contact_id_l + 1);
+         if (client->contact_id == NULL)
+         {
+            log_printf(LOG_ERROR, "client_udp_setup:"
+               " Memory allocation failed (%d bytes)",
+               contact_id_l + 1);
+
+            buf_cleanup(&packet.buf);
+            return;
+         }
+
+         memcpy(client->contact_id, packet.buf.p + contact_id_i, contact_id_l);
+         client->contact_id[contact_id_l] = '\0';
+         client->contact_id_l = contact_id_l;
+
+         client->next = client_list;
+         client_list = client;
+      }
+      else if (!client->connected)
+      {
+         /* disconnecting, ignore packet */
+         buf_cleanup(&packet.buf);
+         return;
+      }
    }
+   else {
+      if (client == NULL)
+      {
+         log_printf(LOG_VERBOSE, "Packet from %.*s:%.*s/udp ignored,"
+            " contact '%.*s' not found",
+            peer.addr_l, peer.addr, peer.port_l, peer.port,
+            contact_id_l, packet.buf.p + contact_id_i);
 
-   if (!client->connected)
-   {
-      /* disconnecting, ignore packet */
-      buf_cleanup(&packet.buf);
-      return;
+         buf_cleanup(&packet.buf);
+         return;
+      }
+
+      if (!client->connected)
+      {
+         /* disconnecting, ignore packet */
+         buf_cleanup(&packet.buf);
+         return;
+      }
    }
 
    if (client->fon.udp.sfd != -1)
@@ -901,6 +1057,27 @@ void client_udp_setup(int sfd)
                   client->box.udp.local.port, &client->box.udp.local.port_l)
           && sfd_register(client->box.udp.sfd, client, client_cleanup))
       {
+         if (!client->connected)
+         {
+            client->connected = 1;
+
+            if (options.log_level > LOG_DETAIL)
+            {
+               log_printf(LOG_VERBOSE, "[%u] Connect %.*s:%.*s/udp,"
+                  " contact '%.*s'",
+                  client->id,
+                  client->fon.udp.peer.addr_l, client->fon.udp.peer.addr,
+                  client->fon.udp.peer.port_l, client->fon.udp.peer.port,
+                  client->contact_id_l, client->contact_id);
+            }
+            else {
+               log_printf(LOG_DETAIL, "[%u] Connect %.*s:%.*s/udp",
+                  client->id,
+                  client->fon.udp.peer.addr_l, client->fon.udp.peer.addr,
+                  client->fon.udp.peer.port_l, client->fon.udp.peer.port);
+            }
+         }
+
          client->fon.udp.packet = packet;
          client_packet(client, &client->fon.udp, &client->box.udp);
          return;
@@ -916,5 +1093,5 @@ void client_udp_setup(int sfd)
    log_printf(LOG_DETAIL, "[%u] Client UDP initialization failed"
       " - disconnecting", client->id);
    buf_cleanup(&packet.buf);
-   tcp_disconnect(&client->fon.tcp.sfd);
+   client_disconnect(client);
 }
