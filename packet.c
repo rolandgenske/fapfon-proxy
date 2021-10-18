@@ -9,8 +9,8 @@
 
    2018-02-09 - v0.1
    2018-02-21 - v0.2, functionally complete
-   2021-20-18 - v0.4, additional diagnostics when packet not recognized
-              - ignore keep-alive packets
+   2021-10-18 - v0.4, additional diagnostics when packet not recognized
+              - v0.4, ignore keep-alive packets
 
    ------------------------------------------------------------------------ */
 

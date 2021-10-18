@@ -9,7 +9,7 @@
 
    2018-02-09 - v0.1
    2018-02-20 - v0.2, functionally complete
-   2021-20-18 - v0.4, additional diagnostics when packet not recognized
+   2021-10-18 - v0.4, additional diagnostics when packet not recognized
 
    ------------------------------------------------------------------------ */
 

@@ -10,6 +10,7 @@
    2018-02-09 - v0.1
    2018-02-21 - v0.2, functionally complete
    2018-12-21 - v0.3, fix UDP REGISTER not recognized
+   2021-10-18 - v0.4, ignore keep-alive packets
 
    ------------------------------------------------------------------------ */
 
@@ -749,20 +750,7 @@ void on_client_event(int sfd, void *context, int sfd_event)
    }
 
    if (from_ep->packet.status == PACKET_INCOMPLETE)
-   {
-      if (protocol == P_UDP)
-      {
-         log_printf(LOG_VERBOSE, "[%u]"
-            " Packet from %.*s:%.*s/udp incomplete - disconnecting",
-            client->id,
-            from_ep->peer.addr_l, from_ep->peer.addr,
-            from_ep->peer.port_l, from_ep->peer.port);
-
-         client_disconnect(client);
-      }
-
       return;
-   }
 
    assert(from_ep->packet.status == PACKET_READY);
    client_packet(client, from_ep, to_ep);
@@ -906,9 +894,7 @@ void client_udp_setup(int sfd)
 
    if (packet.status == PACKET_INCOMPLETE)
    {
-      log_printf(LOG_VERBOSE, "Packet from %.*s:%.*s/udp incomplete",
-         peer.addr_l, peer.addr, peer.port_l, peer.port);
-
+      /* ignore keep-alive packet */
       buf_cleanup(&packet.buf);
       return;
    }
