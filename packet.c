@@ -10,6 +10,7 @@
    2018-02-09 - v0.1
    2018-02-21 - v0.2, functionally complete
    2021-20-18 - v0.4, additional diagnostics when packet not recognized
+              - ignore keep-alive packets
 
    ------------------------------------------------------------------------ */
 
@@ -88,6 +89,19 @@ static int buf_append(buf_t *buf, const void *add_data, uint32_t add_size)
 
 #define SIP_MAX_LEN (6 * 1024)
 
+static void reset_packet(packet_t *packet)
+{
+   packet->header.len = packet->data.len = 0;
+   packet->method.len = 0;
+   packet->current_line.offs = packet->current_line.len = 0;
+   packet->via_line.offs = packet->via_line.len = 0;
+   packet->via.offs = packet->via.len = 0;
+   packet->from.offs = packet->from.len = 0;
+   packet->to.offs = packet->to.len = 0;
+   packet->contact.offs = packet->contact.len = 0;
+   packet->content_length.offs = packet->content_length.len = 0;
+}
+
 int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
 {
    static const char log_prefix[] = "Failed to process packet";
@@ -103,16 +117,7 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
                  packet->buf.used - packet_l);
 
       packet->buf.used -= packet_l;
-
-      packet->header.len = packet->data.len = 0;
-      packet->method.len = 0;
-      packet->current_line.offs = packet->current_line.len = 0;
-      packet->via_line.offs = packet->via_line.len = 0;
-      packet->via.offs = packet->via.len = 0;
-      packet->from.offs = packet->from.len = 0;
-      packet->to.offs = packet->to.len = 0;
-      packet->contact.offs = packet->contact.len = 0;
-      packet->content_length.offs = packet->content_length.len = 0;
+      reset_packet(packet);
    }
 
    packet->status = PACKET_INCOMPLETE;
@@ -181,6 +186,21 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
 
             uint32_t packet_l;
             int ok = 1;
+
+            if (packet->current_line.offs == 0)
+            {
+               /* ignore keep-alive packet */
+
+               if (buf_i < packet->buf.used)
+                  memmove(packet->buf.p, packet->buf.p + buf_i,
+                          packet->buf.used - buf_i);
+
+               packet->buf.used -= buf_i;
+               reset_packet(packet);
+
+               buf_i = 0;
+               continue;
+            }
 
             if (packet->via.offs == 0)
             {
