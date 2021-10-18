@@ -9,6 +9,7 @@
 
    2018-02-09 - v0.1
    2018-02-21 - v0.2, functionally complete
+   2021-20-18 - v0.4, additional diagnostics when packet not recognized
 
    ------------------------------------------------------------------------ */
 
@@ -150,6 +151,7 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
          {
             log_printf(LOG_VERBOSE, "%s: Header line too long (%u bytes)",
                log_prefix, packet->current_line.len);
+            log_dump(LOG_VERBOSE, packet->buf.p, buf_i);
             packet->status = PACKET_ERROR;
             return 0;
          }
@@ -166,6 +168,7 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
             {
                log_printf(LOG_VERBOSE, "%s: Header line not terminated",
                   log_prefix);
+               log_dump(LOG_VERBOSE, packet->buf.p, buf_i);
                packet->status = PACKET_ERROR;
                return 0;
             }
@@ -203,6 +206,7 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
 
             if (!ok)
             {
+               log_dump(LOG_VERBOSE, packet->buf.p, buf_i);
                packet->status = PACKET_ERROR;
                return 0;
             }
@@ -263,6 +267,7 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
                log_printf(LOG_VERBOSE, "%s: "
                   "SIP method or status not recognized",
                   log_prefix);
+               log_dump(LOG_VERBOSE, packet->buf.p, buf_i);
                packet->status = PACKET_ERROR;
                return 0;
             }
@@ -300,6 +305,7 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
             {
                log_printf(LOG_VERBOSE, "%s: SIP header not recognized",
                   log_prefix);
+               log_dump(LOG_VERBOSE, packet->buf.p, buf_i);
                packet->status = PACKET_ERROR;
                return 0;
             }
@@ -387,6 +393,7 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
                      log_printf(LOG_VERBOSE, "%s: "
                         "Content-Length header not recognized",
                         log_prefix);
+                     log_dump(LOG_VERBOSE, packet->buf.p, buf_i);
                      packet->status = PACKET_ERROR;
                      return 0;
                   }
@@ -399,6 +406,7 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
             {
                log_printf(LOG_VERBOSE, "%s: Duplicate %.*s header",
                   log_prefix, l, p);
+               log_dump(LOG_VERBOSE, packet->buf.p, buf_i);
                packet->status = PACKET_ERROR;
                return 0;
             }

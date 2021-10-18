@@ -10,6 +10,7 @@
    2018-02-09 - v0.1
    2018-02-21 - v0.2, functionally complete
    2018-12-21 - v0.3, fix UDP REGISTER not recognized
+   2021-20-18 - v0.4, additional diagnostics when packet not recognized
 
    ------------------------------------------------------------------------ */
 
@@ -20,7 +21,7 @@
    version
    ------------------------------------------------------------------------ */
 
-#define VERSION_STRING "0.3.1221"
+#define VERSION_STRING "0.4.1018"
 
 
 /* ------------------------------------------------------------------------
@@ -201,5 +202,7 @@ int port_aton(uint16_t *port_p, const char *port, uint8_t port_l);
 
 void log_printf(enum loglevel_t level, const char *fmt, ...)
    __attribute__ ((format(printf, 2, 3)));
+
+void log_dump(enum loglevel_t level, const void *bufp, uint32_t len);
 
 #endif /* FAPFON_PROXY_H_INCLUDED */

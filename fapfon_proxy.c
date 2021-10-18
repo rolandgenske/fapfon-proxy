@@ -9,6 +9,7 @@
 
    2018-02-09 - v0.1
    2018-02-20 - v0.2, functionally complete
+   2021-20-18 - v0.4, additional diagnostics when packet not recognized
 
    ------------------------------------------------------------------------ */
 
@@ -465,3 +466,32 @@ void log_printf(enum loglevel_t level, const char *fmt, ...)
    fputc('\n', fp);
    fflush(fp);
 }
+
+void log_dump(enum loglevel_t level, const void *bufp, uint32_t len)
+{
+   if (level <= options.log_level)
+   {
+      FILE *fp = options.log_fp;
+      const unsigned char *p = (const unsigned char *)bufp;
+      u_int32_t i, j;
+
+      for(i = 0; i < len; i += 16)
+      {
+         fprintf(fp, "%03x:", i);
+         for (j = i; j < i+16 && j < len; j++)
+            fprintf(fp, " %02x", p[j]);
+         while (j++ < i+16)
+            fputs("   ", fp);
+         fputs(" |", fp);
+         for (j = i; j < i+16 && j < len; j++)
+            if (p[j] < 0x20 || p[j] > 0x7e)
+               fputc('.', fp);
+            else
+               fprintf(fp, "%c", (char)p[j]);
+         while (j++ < i+16)
+            fputc(' ', fp);
+         fputs("|\n", fp);
+      }
+   }
+}
+
