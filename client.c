@@ -242,6 +242,12 @@ static int16_t contact_id(const packet_t *packet,
                           const loc_t *loc, int16_t *l_p)
 {
    int i = loc->offs, l = i + loc->len;
+   /* Robust against a display name before the SIP URI, e.g.
+      From: "user" <sip:user@192.168.178.1:5060> */
+   while (i < l && packet->buf.p[i] != '<'
+          && !(l - i >= 4 && !strncasecmp(packet->buf.p + i, "sip:", 4)))
+      i++;
+
    if (i < l && packet->buf.p[i] == '<')
       i++;
 
@@ -403,9 +409,65 @@ static int fon_to_box(client_context_t *client,
          return 0;
       }
    }
-   else if (from_ep->packet.data.len)
+   else
    {
       /* UDP connection */
+
+      /* The TCP path above rewrites the Contact address. For UDP clients
+         this never happened, so the Box registered the app's VPN address
+         directly and sent INVITEs straight to the app, bypassing us.
+         Rewrite REGISTER Contact to our Box-facing socket so that
+         incoming INVITEs are routed back through this proxy. */
+      if (   from_ep->packet.method.len == 8
+          && !strncasecmp(from_ep->packet.buf.p, "REGISTER", 8)
+          && from_ep->packet.contact.offs)
+      {
+         int16_t contact_id_i, contact_id_l;
+         data_t d;
+         int addr_i, addr_l, port_i, port_l;
+         addr_t contact;
+
+         contact_id_i = contact_id(&from_ep->packet,
+                                   &from_ep->packet.contact,
+                                   &contact_id_l);
+         if (contact_id_i != -1)
+         {
+            d.p = from_ep->packet.buf.p;
+            d.i = contact_id_i;
+            d.l = from_ep->packet.contact.offs
+                + from_ep->packet.contact.len;
+            d.i += contact_id_l + 1;
+
+            if (   (addr_i = addr_find(&d, &addr_l)) == d.i
+                && (port_i = port_find(&d, addr_i, addr_l, &port_l)) != -1)
+            {
+               memcpy(contact.addr, d.p + addr_i, addr_l);
+               contact.addr[addr_l] = '\0';
+               contact.addr_l = addr_l;
+               memcpy(contact.port, d.p + port_i, port_l);
+               contact.port[port_l] = '\0';
+               contact.port_l = port_l;
+
+               log_printf(LOG_VERBOSE, "[%u] %.*s Contact '%.*s' @%.*s:%.*s",
+                  client->id,
+                  from_ep->packet.method.len, from_ep->packet.buf.p,
+                  client->contact_id_l, client->contact_id,
+                  contact.addr_l, contact.addr,
+                  contact.port_l, contact.port);
+
+               if (!modify_header(&from_ep->packet,
+                                  &contact, &to_ep->local))
+               {
+                  log_printf(LOG_VERBOSE,
+                     "Fon message header address modification failed");
+                  return 0;
+               }
+            }
+         }
+      }
+
+      if (!from_ep->packet.data.len)
+         return 1;
 
       if (client->fon.rtp.addr_l == 0)
       {
@@ -497,16 +559,27 @@ static int box_to_fon(client_context_t *client,
          return 0;
       }
    }
-   else if (client->fon.rtp.addr_l)
+   else
    {
       /* UDP connection */
 
-      if (!modify_data(&from_ep->packet,
-                       &to_ep->peer, &client->fon.rtp))
+      if (!modify_header(&from_ep->packet,
+                         &from_ep->local, &to_ep->peer))
       {
          log_printf(LOG_VERBOSE,
-            "Box message data address modification failed");
+            "Box message header address modification failed");
          return 0;
+      }
+
+      if (client->fon.rtp.addr_l)
+      {
+         if (!modify_data(&from_ep->packet,
+                          &to_ep->peer, &client->fon.rtp))
+         {
+            log_printf(LOG_VERBOSE,
+               "Box message data address modification failed");
+            return 0;
+         }
       }
    }
 

@@ -219,9 +219,38 @@ int next_packet(packet_t *packet, const void *next_data, uint32_t next_size)
             }
             if (packet->content_length.offs == 0)
             {
-               log_printf(LOG_VERBOSE, "%s: No Content-Length header",
-                  log_prefix);
-               ok = 0;
+               /* FRITZ!AppFon/AppPushProvider omits Content-Length for
+                  empty SIP messages. Add it so the packet can be framed
+                  and forwarded. */
+               static const char cl[] = "Content-Length: 0\r\n";
+               const uint32_t cl_l = sizeof(cl) - 1;
+               uint32_t insert_i = buf_i;
+
+               if (insert_i >= 2 && packet->buf.p[insert_i-2] == '\r'
+                   && packet->buf.p[insert_i-1] == '\n')
+                  insert_i -= 2;
+               else if (insert_i >= 1 && packet->buf.p[insert_i-1] == '\n')
+                  insert_i -= 1;
+
+               if (!buf_resize(&packet->buf, packet->buf.used + cl_l))
+               {
+                  log_printf(LOG_VERBOSE, "%s: Cannot add Content-Length",
+                     log_prefix);
+                  packet->status = PACKET_ERROR;
+                  return 0;
+               }
+
+               memmove(packet->buf.p + insert_i + cl_l,
+                       packet->buf.p + insert_i,
+                       packet->buf.used - insert_i);
+               memcpy(packet->buf.p + insert_i, cl, cl_l);
+               packet->buf.used += cl_l;
+               buf_i += cl_l;
+
+               /* same loc as regular header parsing: points to " 0" */
+               packet->content_length.offs = insert_i + 15;
+               packet->content_length.len = 2;
+               packet->current_line.offs += cl_l;
             }
 
             if (!ok)
