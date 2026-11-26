@@ -242,6 +242,12 @@ static int16_t contact_id(const packet_t *packet,
                           const loc_t *loc, int16_t *l_p)
 {
    int i = loc->offs, l = i + loc->len;
+   /* Robust against a display name before the SIP URI, e.g.
+      From: "user" <sip:user@192.168.178.1:5060> */
+   while (i < l && packet->buf.p[i] != '<'
+          && !(l - i >= 4 && !strncasecmp(packet->buf.p + i, "sip:", 4)))
+      i++;
+
    if (i < l && packet->buf.p[i] == '<')
       i++;
 
